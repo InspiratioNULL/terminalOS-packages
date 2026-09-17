@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "generated": "2026-09-20",
+  "runtime": {
+    "abi": "wasm32-wasip1",
+    "engine": "wasm3",
+    "installs_to": "~/Library/bin"
+  },
+  "packages": [
+    {
+      "name": "units",
+      "version": "2.23",
+      "description": "GNU unit conversion calculator, with the unit database built in",
+      "homepage": "https://www.gnu.org/software/units/",
+      "license": "GPL-3.0-or-later",
+      "commands": [
+        "units"
+      ],
+      "notes": "Interactive when run with no arguments. The database (definitions, currency, elements, CPI) is compiled into the binary; currency rates are a snapshot from 2024-02-18.",
+      "files": [
+        "units.wasm"
+      ],
+      "archive": "units.zip",
+      "url": "https://github.com/InspiratioNULL/terminalOS-packages/raw/main/units.zip",
+      "sha256": "5dd7c1d27a0e5dfd67970ac0e3956f9d8521721a593da48a5f58db0487a579d1",
+      "size": 750080,
+      "source": "src/units"
+    },
+    {
+      "name": "jq",
+      "version": "1.7.1",
+      "description": "Command-line JSON processor",
+      "homepage": "https://jqlang.github.io/jq/",
+      "license": "MIT",
+      "commands": [
+        "jq"
+      ],
+      "notes": "Includes the Oniguruma regex builtins (test, match, capture, sub, splits). Passes all 447 upstream tests under wasm3.",
+      "files": [
+        "jq.wasm"
+      ],
+      "archive": "jq.zip",
+      "url": "https://github.com/InspiratioNULL/terminalOS-packages/raw/main/jq.zip",
+      "sha256": "ded184f049dbc6c53ffde7c42fb861cc3f3ba4d828041cd9ce14085c487902d1",
+      "size": 900608,
+      "source": "src/jq"
+    },
+    {
+      "name": "sqlite3",
+      "version": "3.50.4",
+      "description": "SQLite command-line shell, with FTS5, R*Tree and JSON",
+      "homepage": "https://sqlite.org/cli.html",
+      "license": "blessing",
+      "commands": [
+        "sqlite3"
+      ],
+      "notes": "Databases open lock-free (the unix-none VFS): safe for one process at a time, which is what a terminal does. No WAL, no loadable extensions, no .shell/.excel.",
+      "files": [
+        "sqlite3.wasm"
+      ],
+      "archive": "sqlite3.zip",
+      "url": "https://github.com/InspiratioNULL/terminalOS-packages/raw/main/sqlite3.zip",
+      "sha256": "d3a3097d1a3aeaac3674e92e802aab0fc207724301c793e055b714462f8bba57",
+      "size": 1211904,
+      "source": "src/sqlite3"
+    },
+    {
+      "name": "datamash",
+      "version": "1.9",
+      "description": "GNU command-line statistics: group-by, mean, median, sum, crosstab",
+      "homepage": "https://www.gnu.org/software/datamash/",
+      "license": "GPL-3.0-or-later",
+      "commands": [
+        "datamash"
+      ],
+      "notes": "The companion 'decorate' program is not included: it needs to pipe through a real sort(1) process.",
+      "files": [
+        "datamash.wasm"
+      ],
+      "archive": "datamash.zip",
+      "url": "https://github.com/InspiratioNULL/terminalOS-packages/raw/main/datamash.zip",
+      "sha256": "c56f21ab4f85cf16ce7e1712f1f9e63b0487d480f9a8a63db855cb5a03f1a761",
+      "size": 175104,
+      "source": "src/datamash"
+    },
+    {
+      "name": "nano",
+      "version": "9.2",
+      "description": "GNU nano, the full-screen editor, with syntax highlighting built in",
+      "homepage": "https://www.nano-editor.org/",
+      "license": "GPL-3.0-or-later",
+      "commands": [
+        "nano",
+        "pico"
+      ],
+      "notes": "Requires direct keystroke input enabled in the host app. The 39 syntax definitions are compiled into the binary, so colouring works with nothing on disk; a nanorc in the working directory, or one named with -f, still overrides it. No subprocesses: ^T reports an error, and the spell checker, formatter and linter are not built. ^Z cannot suspend, nothing can deliver SIGWINCH so a rotate needs ^L to redraw, and ESC pressed on its own is not seen until the next key (Meta combinations are unaffected). pico is a second copy of the same binary, which is why the archive is twice its size.",
+      "files": [
+        "nano.wasm",
+        "pico.wasm"
+      ],
+      "archive": "nano.zip",
+      "url": "https://github.com/InspiratioNULL/terminalOS-packages/raw/main/nano.zip",
+      "sha256": "814f9584f00ffa27476c73efc61b3c9966f9d0f10b5d37caf1c49d55739418cc",
+      "size": 1351680,
+      "source": "src/nano"
+    },
+    {
+      "name": "ed",
+      "version": "1.21",
+      "description": "GNU ed, the standard line editor: scriptable, no cursor addressing",
+      "homepage": "https://www.gnu.org/software/ed/",
+      "license": "GPL-2.0-or-later",
+      "commands": [
+        "ed"
+      ],
+      "notes": "Shell escapes (!command, r !command, w !command) report an error: WASI has no subprocesses. Everything else passes the upstream testsuite. Needs a writable working directory for its buffer file.",
+      "files": [
+        "ed.wasm"
+      ],
+      "archive": "ed.zip",
+      "url": "https://github.com/InspiratioNULL/terminalOS-packages/raw/main/ed.zip",
+      "sha256": "a9e4384788219dfadc5a1cc8c85cc08a6c37a05013ac41d57e3459c228cb4b3a",
+      "size": 141312,
+      "source": "src/ed"
+    }
+  ]
+}

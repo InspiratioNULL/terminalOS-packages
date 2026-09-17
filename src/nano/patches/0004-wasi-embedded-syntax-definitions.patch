@@ -1,0 +1,94 @@
+# nano's syntax definitions and its system-wide nanorc are installed into
+# prefixes (/usr/local/share/nano and /usr/local/etc) that a WASI program
+# cannot reach: wasm3 preopens only the working directory. Without them nano
+# runs but can never colour anything, having found no syntaxes at all. They
+# are compiled into the binary instead -- the same answer the units package
+# uses for its unit database -- and served from memory when the filesystem
+# does not answer. A real file still wins, so -f and a local nanorc override.
+#
+# parse_includes globs with GLOB_NOCHECK, so an include naming a file that
+# does not exist is passed through literally and reaches parse_one_include
+# unchanged; hooking that one open is enough to serve every syntax.
+
+--- a/src/rcfile.c
++++ b/src/rcfile.c
+@@ -31,6 +31,32 @@
+ #include <string.h>
+ #include <unistd.h>
+ 
++#ifdef __wasi__
++#include "wasi_embed.h"
++
++/* nano's syntax definitions are installed into a prefix -- by default
++ * /usr/local/share/nano -- and its system-wide nanorc into another.  wasm3
++ * preopens the shell's working directory and nothing else, so neither prefix
++ * exists as far as this program is concerned, and an absolute path is refused
++ * before it is resolved.  Without a way to reach them nano still runs, but
++ * every buffer is monochrome, because it never finds a single syntax.
++ *
++ * So they are compiled in (see tools/embed.py, which the units package uses
++ * for its database for the same reason), and served from memory whenever the
++ * real filesystem does not answer.  A real file always wins: an rcfile in the
++ * working directory, or one named with -f, still overrides what is built in.
++ *
++ * The lookup is by basename, which is what makes this work with the paths
++ * nano constructs: SYSCONFDIR "/nanorc" and the generated
++ * include "<name>.nanorc" lines both end in a name the table knows. */
++static FILE *open_embedded_rcfile(const char *file)
++{
++	const embedded_file *entry = embedded_lookup(file);
++
++	return entry ? fmemopen((void *)entry->data, entry->size, "r") : NULL;
++}
++#endif
++
+ #ifndef RCFILE_NAME
+ #define HOME_RC_NAME  ".nanorc"
+ #define RCFILE_NAME  "nanorc"
+@@ -921,6 +947,11 @@
+ 
+ 	rcstream = fopen(file, "rb");
+ 
++#ifdef __wasi__
++	if (rcstream == NULL)
++		rcstream = open_embedded_rcfile(file);
++#endif
++
+ 	if (rcstream == NULL) {
+ 		jot_error(N_("Error reading %s: %s"), file, strerror(errno));
+ 		return;
+@@ -1702,6 +1733,11 @@
+ {
+ 	FILE *rcstream = fopen(nanorc, "rb");
+ 
++#ifdef __wasi__
++	if (rcstream == NULL)
++		rcstream = open_embedded_rcfile(nanorc);
++#endif
++
+ 	/* If opening the file succeeded, parse it.  Otherwise, only
+ 	 * complain if the file actually exists. */
+ 	if (rcstream)
+@@ -1719,7 +1755,21 @@
+ 	free(nanorc);
+ 	nanorc = concatenate(path, name);
+ 
+-	return is_good_file(nanorc);
++	if (is_good_file(nanorc))
++		return TRUE;
++
++#ifdef __wasi__
++	/* Nothing on disk, but the built-in table may still have it: this is what
++	 * lets the compiled-in nanorc stand in for SYSCONFDIR/nanorc.  The table
++	 * matches on basename, and do_rcfiles also looks for
++	 * ~/.config/nano/nanorc, whose basename is the same one -- so match the
++	 * whole path here, or the system rcfile is found twice and every syntax
++	 * is defined twice over. */
++	if (strcmp(nanorc, SYSCONFDIR "/nanorc") == 0)
++		return embedded_lookup(nanorc) != NULL;
++#endif
++
++	return FALSE;
+ }
+ 
+ /* Process the nanorc file that was specified on the command line (if any),

@@ -1,0 +1,86 @@
+--- a/units.c	2026-09-16 20:45:16
++++ b/units.c	2026-09-16 20:45:51
+@@ -84,6 +84,16 @@
+ #include "getopt.h"
+ #include "units.h"
+ 
++#ifdef __wasi__
++/* terminalOS/WASI port: wasm3 preopens only the working directory, so the
++   units database cannot be read from an install prefix: it is compiled into
++   the binary instead (see openfile below).  There are no subprocesses either,
++   so the pager is disabled and pclose is never reached. */
++#  include "wasi_embed.h"
++#  define pclose(fp) (0)
++#  define WASI_HELP_LINES 20   /* lines of context for an interactive "help unit" */
++#endif
++
+ #ifndef UNITSFILE
+ #  define UNITSFILE "definitions.units"
+ #endif
+@@ -415,6 +425,15 @@
+     return NULL;
+   }
+   fileptr = fopen(file,mode);
++#ifdef __wasi__
++  /* A real file always wins, so 'units -f ./my.units' still works; the
++     built-in database is served from memory when the path is absent. */
++  if (!fileptr && *mode == 'r'){
++    const embedded_file *embedded = embedded_lookup(file);
++    if (embedded)
++      fileptr = fmemopen((void *) embedded->data, embedded->size, "r");
++  }
++#endif
+   return fileptr;
+ }  
+ 
+@@ -4009,12 +4028,16 @@
+ {
+   FILE *fp = NULL;
+ 
++#ifndef __wasi__
+   if (isatty(fileno(stdout)) && screensize() < lines) {
+     if ((fp = popen(pager, "w")) == NULL) {
+       fprintf(stderr, "%s: can't run pager '%s--'", progname, pager);
+       perror((char*) NULL);
+     }
+   }
++#else
++  (void) lines;
++#endif
+   if (!fp)
+     fp = stdout;
+ 
+@@ -6063,10 +6086,33 @@
+ #else	/* *nix */
+     commandstr = "%s +%d %s";
+ #endif
++#ifdef __wasi__
++    /* No subprocesses under WASI, so print the definition where the pager
++       would have opened the database. */
++    {
++      FILE *helpfp = openfile(file, "rt");
++
++      if (!helpfp)
++        fprintf(stderr, "%s: cannot open '%s' to display help\n",
++                progname, file);
++      else {
++        char helpbuf[1024];
++        int lineno = 0, lastline = unitline + WASI_HELP_LINES;
++
++        while (lineno < lastline && fgets(helpbuf, sizeof(helpbuf), helpfp)){
++          lineno++;
++          if (lineno >= unitline)
++            fputs(helpbuf, stdout);
++        }
++        fclose(helpfp);
++      }
++    }
++#else
+     sprintf(commandbuf, commandstr, pager, unitline, file);
+     if (system(commandbuf))
+       fprintf(stderr,"%s: cannot invoke pager '%s' to display help\n", 
+               progname, pager);
++#endif
+     return 1;
+   }
+   return 0;

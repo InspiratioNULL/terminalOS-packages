@@ -1,0 +1,167 @@
+--- a/signal.c
++++ b/signal.c
+@@ -20,7 +20,9 @@
+ #include <ctype.h>
+ #include <errno.h>
+ #include <limits.h>
++#ifndef __wasi__
+ #include <setjmp.h>
++#endif
+ #include <signal.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -31,7 +33,9 @@
+ #include "ed.h"
+ 
+ 
++#ifndef __wasi__
+ jmp_buf jmp_state;			/* jumps to main_loop */
++#endif
+ static int mutex = 0;			/* if > 0, signals stay pending */
+ static int window_lines_ = 22;		/* scroll lines set by sigwinch_handler */
+ static int window_columns_ = 72;
+@@ -84,6 +88,11 @@
+ 
+ static void sigint_handler( int signum )
+   {
++#ifdef __wasi__
++  /* WASI delivers no signals, so this is never called and there is nothing
++     to jump back to (see main_loop). */
++  if( signum ) {}
++#else
+   if( mutex ) sigint_pending = true;
+   else
+     {
+@@ -94,6 +103,7 @@
+     sigprocmask( SIG_UNBLOCK, &set, 0 );
+     longjmp( jmp_state, -1 );
+     }
++#endif
+   }
+ 
+ 
+@@ -113,6 +123,7 @@
+   }
+ 
+ 
++#ifndef __wasi__
+ static int set_signal( const int signum, void (*handler)( int ) )
+   {
+   struct sigaction new_action;
+@@ -126,6 +137,7 @@
+ #endif
+   return sigaction( signum, &new_action, 0 );
+   }
++#endif	/* !__wasi__ */
+ 
+ 
+ void enable_interrupts( void )
+@@ -144,6 +156,9 @@
+ 
+ void set_signals( void )
+   {
++#ifdef __wasi__
++  sigwinch_handler( 0 );		/* pick up a window size if one is available */
++#else
+ #ifdef SIGWINCH
+   sigwinch_handler( SIGWINCH );
+   if( isatty( 0 ) ) set_signal( SIGWINCH, sigwinch_handler );
+@@ -151,6 +166,7 @@
+   set_signal( SIGHUP, sighup_handler );
+   set_signal( SIGQUIT, SIG_IGN );
+   set_signal( SIGINT, sigint_handler );
++#endif	/* __wasi__ */
+   }
+ 
+ 
+--- a/main_loop.c
++++ b/main_loop.c
+@@ -19,7 +19,9 @@
+ #include <ctype.h>
+ #include <errno.h>
+ #include <limits.h>
++#ifndef __wasi__
+ #include <setjmp.h>
++#endif
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+@@ -672,8 +674,13 @@
+     case '!': if( unexpected_address( addr_cnt ) ) return ERR;
+               fnp = get_shell_command( ibufpp );
+               if( !fnp ) return ERR;
++#ifdef __wasi__
++              set_error_msg( "Shell escapes are unavailable in the WebAssembly build" );
++              return ERR;
++#else
+               if( system( fnp + 1 ) < 0 )
+                 { set_error_msg( "Can't create shell process" ); return ERR; }
++#endif
+               if( !scripted() ) fputs( "!\n", stdout );
+               break;
+     case '\n': if( !check_second_addr( current_addr() +
+@@ -748,14 +755,20 @@
+ 
+ int main_loop( const bool initial_error, const bool loose )
+   {
+-  extern jmp_buf jmp_state;
+   const char * ibufp;			/* pointer to command buffer */
+   volatile int err_status = 0;		/* program exit status */
+   int len = 0, status;
+ 
+   disable_interrupts();
+   set_signals();
++#ifdef __wasi__
++  status = 0;				/* no signals, so no interrupt to catch */
++#else
++  {
++  extern jmp_buf jmp_state;
+   status = setjmp( jmp_state );
++  }
++#endif
+   if( status == 0 )			/* direct invocation of setjmp */
+     { enable_interrupts(); if( initial_error ) status = err_status = 1; }
+   else { status = -1; fputs( "\n?\n", stdout ); set_error_msg( "Interrupt" ); }
+--- a/io.c
++++ b/io.c
+@@ -22,6 +22,12 @@
+ #include <string.h>
+ 
+ #include "ed.h"
++
++#ifdef __wasi__
++/* WASI has no subprocesses: '!command' file names are rejected above, so the
++   pclose calls below are unreachable. */
++#define pclose( fp ) ( -1 )
++#endif
+ 
+ 
+ static const line_t * unterminated_line = 0;	/* last line has no '\n' */
+@@ -285,7 +291,12 @@
+   FILE * fp;
+   int ret;
+ 
+-  if( *filename == '!' ) fp = popen( filename + 1, "r" );
++  if( *filename == '!' )
++#ifdef __wasi__
++    { set_error_msg( "Shell escapes are unavailable in the WebAssembly build" ); return -1; }
++#else
++    fp = popen( filename + 1, "r" );
++#endif
+   else if( !( fp = fopen( filename, "r+" ) ) && errno != ENOENT &&
+            ( fp = fopen( filename, "r" ) ) && read_onlyp && !modified() )
+     *read_onlyp = true;
+@@ -343,7 +354,12 @@
+   FILE * fp;
+   int ret;
+ 
+-  if( *filename == '!' ) fp = popen( filename + 1, "w" );
++  if( *filename == '!' )
++#ifdef __wasi__
++    { set_error_msg( "Shell escapes are unavailable in the WebAssembly build" ); return -1; }
++#else
++    fp = popen( filename + 1, "w" );
++#endif
+   else fp = fopen( filename, mode );
+   if( !fp )
+     { show_strerror( filename, errno );

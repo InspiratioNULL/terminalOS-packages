@@ -1,0 +1,45 @@
+# nano runs a command in a child process for ^R ^X; WASI has no fork,
+# exec or pipe. nano already guards the machinery on HAVE_FORK, so it
+# compiles out on its own -- but the include of <sys/wait.h> is not
+# guarded, and wasi-libc's copy names siginfo_t, which WASI does not
+# define. With the include guarded to match, the one thing left is that
+# execute_command's body vanishes entirely and the command is accepted
+# and silently ignored; it now reports the limitation instead.
+
+--- a/src/files.c
++++ b/src/files.c
+@@ -29,7 +29,9 @@
+ #endif
+ #include <string.h>
+ #include <unistd.h>
++#ifdef HAVE_FORK
+ #include <sys/wait.h>
++#endif
+ 
+ #define RW_FOR_ALL  (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
+ 
+@@ -1137,6 +1139,12 @@
+ 	/* Restore the terminal to its desired state, and disable
+ 	 * interpretation of the special control keys again. */
+ 	terminal_init();
++#else
++	/* WASI has no fork, no exec and no pipe, so there is no second process
++	 * for a command to run in and no way to read its output back.  Without
++	 * this branch the whole body compiles away and ^R ^X accepts a command
++	 * and then silently does nothing. */
++	statusline(ALERT, _("Cannot run commands: no subprocesses under WASI"));
+ #endif
+ }
+ #endif /* NANO_TINY */
+--- a/src/text.c
++++ b/src/text.c
+@@ -30,7 +30,9 @@
+ #include <string.h>
+ #include <time.h>
+ #include <unistd.h>
++#ifdef HAVE_FORK
+ #include <sys/wait.h>
++#endif
+ 
+ #ifndef NANO_TINY
+ /* Toggle the mark. */

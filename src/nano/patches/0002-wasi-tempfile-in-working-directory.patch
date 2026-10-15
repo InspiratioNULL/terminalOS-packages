@@ -1,0 +1,38 @@
+# nano writes the temporary file behind ^R ^X and the spell checker into
+# $TMPDIR, P_tmpdir or /tmp. wasm3 preopens only the shell's working
+# directory, so none of those can be named, and wasi-libc defines no
+# P_tmpdir at all. The file goes into the working directory instead.
+
+--- a/src/files.c
++++ b/src/files.c
+@@ -1426,11 +1426,22 @@
+  * file stream opened in read-write mode.  On error, return NULL. */
+ char *safe_tempfile(FILE **stream)
+ {
++#ifndef __wasi__
+ 	const char *env_dir = getenv("TMPDIR");
++#endif
+ 	char *tempdir = NULL, *tempfile_name = NULL;
+ 	char *extension;
+ 	int descriptor;
+ 
++#ifdef __wasi__
++	/* A WASI program can name only what the host preopened for it, and wasm3
++	 * preopens one directory: the shell's working directory.  $TMPDIR,
++	 * P_tmpdir and /tmp all lie outside it -- P_tmpdir is not even defined by
++	 * wasi-libc -- and an absolute path is refused before it is resolved.  So
++	 * the temporary file is created in the working directory under a relative
++	 * name, which is the only writable place there is. */
++	tempdir = copy_of("");
++#else
+ 	/* Get the absolute path for the first directory among $TMPDIR
+ 	 * and P_tmpdir that is writable, otherwise use /tmp/. */
+ 	if (env_dir)
+@@ -1441,6 +1452,7 @@
+ 
+ 	if (tempdir == NULL)
+ 		tempdir = copy_of("/tmp/");
++#endif
+ 
+ 	extension = strrchr(openfile->filename, '.');
+ 

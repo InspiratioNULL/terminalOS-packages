@@ -1,0 +1,21 @@
+# get_homedir falls back to the password database when $HOME is unset,
+# guarded on HAVE_PWD_H alone while calling geteuid, which wasi-libc does
+# not provide. Guarded on both, as nano does at every other call site.
+
+--- a/src/utils.c
++++ b/src/utils.c
+@@ -35,7 +35,13 @@
+ 	if (homedir == NULL) {
+ 		const char *homenv = getenv("HOME");
+ 
+-#ifdef HAVE_PWD_H
++/* WASI has no user identity and no password database: no geteuid to ask who
++ * we are, and no entry to look up if we could.  nano pairs the two conditions
++ * everywhere else it consults the database -- see write_lockfile, and the
++ * read-only check in open_buffer -- and only here tests for the header alone
++ * and then calls geteuid anyway.  Requiring the pair leaves $HOME as the one
++ * source of a home directory, which is what the shell provides. */
++#if defined(HAVE_PWD_H) && defined(HAVE_GETEUID)
+ 		/* When $HOME is unset, or when we're root, try the database. */
+ 		if (homenv == NULL || geteuid() == ROOT_UID) {
+ 			const struct passwd *userage = getpwuid(geteuid());
